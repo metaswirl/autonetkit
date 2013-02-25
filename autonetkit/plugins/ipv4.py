@@ -68,7 +68,7 @@ class TreeNode(object):
         return isinstance(self.host, autonetkit.anm.overlay_interface)
 
     def is_host(self):
-        return self.host
+        return bool(self.host)
 
     def children(self):
         return [TreeNode(self.graph, child) for child in self.graph.successors(self.node)]
@@ -291,7 +291,7 @@ class IpTree(object):
             prefixlen = node.prefixlen
             subnet = node.subnet.subnet(prefixlen+1)
 
-            if node.is_loopback_group(): # special case of single AS -> root is loopback_group
+            if node.is_loopback_group() or node.is_collision_domain(): # special case of single AS -> root is loopback_group
                 #TODO: generalise this rather than repeated code with below
                 #node.subnet = subnet.next() # Note: don't break into smaller subnets if single-AS
                 iterhosts = node.subnet.iter_hosts() # ensures start at .1 rather than .0
@@ -377,7 +377,6 @@ class IpTree(object):
 # assigns allocated addresses back to hosts
         edges = [n for n in self if n.is_host() and n.host.src]
         for edge in edges:
-            #print "edge subnet", edge.subnet
             edge.host.ip_address = edge.subnet
 
 #TODO: do we need to store loopback groups into advertise addresses?
@@ -458,6 +457,7 @@ def allocate_ips(G_ip, infrastructure = True):
             'name': "ip",
             'children': 
             [loopback_tree, secondary_loopback_tree, cd_tree],
+            #[cd_tree],
             #[secondary_loopback_tree],
                 #[loopback_tree],
             }

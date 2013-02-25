@@ -15,11 +15,7 @@ __all__ = ['build']
 
 MESSAGING = ank_messaging.AnkMessaging()
 
-
-def build(input_graph_string):
-    """Main function to build network overlay topologies"""
-    anm = autonetkit.anm.AbstractNetworkModel()
-
+def load(input_graph_string):
     try:
         input_graph = graphml.load_graphml(input_graph_string)
     except autonetkit.exception.AnkIncorrectFileFormat:
@@ -36,6 +32,40 @@ def build(input_graph_string):
             'deploy': True,
             },
         }
+
+    return input_graph
+
+def grid_2d(dim):
+    import networkx as nx
+    graph = nx.grid_2d_graph(dim, dim)
+
+    for n in graph:
+        graph.node[n]['asn'] = 1
+        graph.node[n]['x'] = n[0] * 150
+        graph.node[n]['y'] = n[1] * 150
+        graph.node[n]['device_type'] = 'router'
+        graph.node[n]['platform'] = 'cisco'
+        graph.node[n]['syntax'] = 'ios2'
+        graph.node[n]['host'] = 'internal'
+
+    mapping = {n: "%s_%s" % (n[0], n[1]) for n in graph}
+    nx.relabel_nodes(graph, mapping, copy=False) # Networkx wipes data if remap with same labels
+    for index, (src, dst) in enumerate(graph.edges()):
+        graph[src][dst]['type'] = "physical"
+        graph[src][dst]['edge_id'] = "%s_%s_%s" % (index, src, dst) # add global index for sorting
+
+    SETTINGS['General']['deploy'] = True
+    SETTINGS['Deploy Hosts']['internal'] = {
+        'cisco': {
+        'deploy': True,
+        },
+    }
+
+    return graph
+
+def build(input_graph):
+    """Main function to build network overlay topologies"""
+    anm = autonetkit.anm.AbstractNetworkModel()
 
     input_undirected = nx.Graph(input_graph)
     g_in = anm.add_overlay("input", graph=input_undirected)
@@ -65,6 +95,7 @@ def build(input_graph_string):
                               'device_subtype', 'pop', 'asn'])
 
     build_phy(anm)
+    autonetkit.update_http(anm)
     g_phy = anm['phy']
 
     build_vrf(anm)
@@ -86,7 +117,10 @@ def build(input_graph_string):
         node.use_ipv4 = allocate_ipv4_infrastructure
         node.use_ipv6 = allocate_ipv6
 
-    igp = g_in.data.igp or "ospf" 
+    default_igp = g_in.data.igp or "ospf" 
+    non_igp_nodes = [n for n in g_in if not node.igp]
+    g_in.update(non_igp_nodes, igp=default_igp)
+
     anm.add_overlay("ospf")
     anm.add_overlay("isis")
 
@@ -95,6 +129,7 @@ def build(input_graph_string):
     build_ospf(anm)
     build_isis(anm)
     build_bgp(anm)
+    autonetkit.update_http(anm)
 
     return anm
 
@@ -157,14 +192,20 @@ def vrf_edges(g_vrf):
 def build_vrf(anm):
     """Build VRF Overlay"""
     g_in = anm['input']
-    g_vrf = anm.add_overlay("vrf", directed=True)
+    g_vrf = anm.add_overlay("vrf")
     g_vrf.add_nodes_from(g_in.nodes("is_router"), retain=["vrf_role", "vrf"])
 
     allocate_vrf_roles(g_vrf)
 
-    pe_to_ce_edges, ce_to_pe_edges = vrf_edges(g_vrf)
-    g_vrf.add_edges_from(pe_to_ce_edges, direction="u")
-    g_vrf.add_edges_from(ce_to_pe_edges, direction="d")
+    def is_pe_ce_edge(edge):
+        src_vrf_role = g_vrf.node(edge.src).vrf_role
+        dst_vrf_role = g_vrf.node(edge.dst).vrf_role
+        return (src_vrf_role, dst_vrf_role) in (("PE", "CE"), ("CE", "PE"))
+
+    vrf_add_edges = (e for e in g_in.edges()
+            if e.src.asn == e.dst.asn and is_pe_ce_edge(e))
+
+    g_vrf.add_edges_from(vrf_add_edges, retain=['edge_id'])
 
     add_vrf_loopbacks(g_vrf)
     # allocate route-targets per AS
@@ -183,6 +224,10 @@ def build_vrf(anm):
         vrf_loopbacks = node.interfaces("is_loopback", "vrf_name")
         for index, interface in enumerate(vrf_loopbacks, start = 101):
             interface.index = index 
+
+    for edge in g_vrf.edges():
+        # Set the vrf of the edge to be that of the CE device (either src or dst)
+        edge.vrf = edge.src.vrf if edge.src.vrf_role is "CE" else edge.dst.vrf
 
 # Create route-targets
 
@@ -419,9 +464,9 @@ def build_ipv4(anm, infrastructure=True):
         ank_utils.split(g_ipv4, edges_to_split, retain='edge_id'))
     for node in split_created_nodes:
         node['graphics'].x = ank_utils.neigh_average(g_ipv4, node, "x",
-                                                     g_graphics)
+                                                     g_graphics) + 0.1 # temporary fix for gh-90
         node['graphics'].y = ank_utils.neigh_average(g_ipv4, node, "y",
-                                                     g_graphics)
+                                                     g_graphics) + 0.1 # temporary fix for gh-90
         asn = ank_utils.neigh_most_frequent(
             g_ipv4, node, "asn", g_phy)  # arbitrary choice
         node['graphics'].asn = asn
