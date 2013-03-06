@@ -129,6 +129,7 @@ def build(input_graph):
     build_ospf(anm)
     build_isis(anm)
     build_bgp(anm)
+    build_dns(anm)
     autonetkit.update_http(anm)
 
     return anm
@@ -680,6 +681,62 @@ def build_isis(anm):
         link.metric = 1  # default
         # link.hello = 5 # for debugging, TODO: read from graph
 
+def build_dns(anm):
+    """Build dns overlay"""
+    # Annahme: Ein DNS Server per AS
+    g_in = anm['input']
+    g_phy = anm['phy']
+    g_ipv4 = anm['ipv4']
+
+    # create overlay, copy all references to all relevant nodes
+    g_dns = anm.add_overlay("dns")
+    g_dns.add_nodes_from(g_in.nodes("dns"), retain=['asn', 'dns', 'dns2'])
+    # TODO: Create edges for clients -> ( recursors -> ) servers
+    # FIXME: g_dns.remove all with dns == "" or "none" or "None" 
+    # TODO: define option to choose between destination selection mechanisms
+
+    forward_zones = [("as%d" % node.asn, g_ipv4.node(node).loopback) for node in g_dns.nodes(dns="server")]
+
+    def get_closest_dst(g_in, src, possible_dst):
+        """ find closest node by hop_count """
+        # TODO: implement
+        """
+        1. Initital: Take first element, old_best = first element
+        2. Take another if possible
+        3. Count edge distance
+        4. New one closer than old_best, old_best = new one
+        5. Go to 2
+        """
+        pass
+
+    def get_first_dst(src, possible_dst):
+        return possible_dst.next()
+
+    def get_dst(src, possible_dst):
+        return g_ipv4.node(get_first_dst(src, possible_dst)).loopback
+
+    for _, devices in g_dns.groupby("asn").items():
+        as_graph = g_dns.subgraph(devices)
+        name_space = [(str(node["dns2"]), g_ipv4.node(node).loopback) for node in as_graph.nodes(dns = "destination")]
+            
+        for node in as_graph.nodes(dns = "server"):
+            node.dns_entries = name_space
+            node.caching = False
+
+        for node in as_graph.nodes(dns = "recursor"):
+            node.caching = False
+            node.forward_zones = forward_zones 
+
+        try: 
+            for cli in as_graph.nodes(dns = "client"):
+                cli.dns_dst = get_dst(cli, as_graph.nodes(dns = "recursor"))
+        except StopIteration:
+            try: 
+                for cli in as_graph.nodes(dns = "client"):
+                    cli.dns_dst = get_dst(cli, as_graph.nodes(dns = "server"))
+            except StopIteration:
+                log.warn("No dns server defined!")
+                sys.exit(1)
 
 def update_messaging(anm):
     """Sends ANM to web server"""
