@@ -25,6 +25,9 @@ try:
 except pkg_resources.DistributionNotFound:
     ANK_VERSION = "dev"
 
+def resource_path(relative):
+    """Makes relative to package"""
+    return pkg_resources.resource_filename(__name__, relative)
 
 def file_monitor(filename):
     """Generator based function to check if a file has changed"""
@@ -202,7 +205,8 @@ def main():
         try:
             log.info("Monitoring for updates...")
             input_filemonitor = file_monitor(options.file)
-            build_filemonitor = file_monitor("autonetkit/build_network.py")
+            source = resource_path("build_network.py")
+            build_filemonitor = file_monitor(source)
             while True:
                 time.sleep(1)
                 rebuild = False
