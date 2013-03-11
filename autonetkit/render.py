@@ -34,6 +34,12 @@ def remove_dirs(dirs):
         except OSError, e:
             log.warning("Unable to remove %s, %s" % (directory, e))
 
+def remove_empty_folders(base):
+    for directory, _, _ in os.walk(base):
+        if not os.listdir(directory):
+            os.rmdir(directory)
+            log.debug("Removing empty directory %s" % directory)
+
 def resource_path(relative):
     """Makes relative to package"""
     return pkg_resources.resource_filename(__name__, relative)
@@ -153,12 +159,16 @@ def render_node(node, folder_cache):
                             )
                     dst_file = os.path.normpath((os.path.join(render_base_output_dir, template_file)))
                     dst_file, _ = os.path.splitext(dst_file) # remove .mako suffix
-                    with open( dst_file, 'wb') as dst_fh:
-                        dst_fh.write(mytemplate.render(
-                            node = node, 
-                            ank_version = ank_version,
-                            date = date,
-                            ))
+                    rendered_template = mytemplate.render(
+                        node = node, 
+                        ank_version = ank_version,
+                        date = date,
+                        )
+                    if len(rendered_template) > 0:
+                        with open( dst_file, 'wb') as dst_fh:
+                            dst_fh.write(rendered_template)
+
+                remove_empty_folders(render_base_output_dir)
                 return
                 
             render_base = resource_path(render_base)
@@ -191,11 +201,16 @@ def render_node(node, folder_cache):
                 dst_file, _ = os.path.splitext(dst_file) # remove .mako suffix
                 #print("Writing %s"% dst_file)
                 with open( dst_file, 'wb') as dst_fh:
-                    dst_fh.write(mytemplate.render(
+                    rendered_template = mytemplate.render(
                         node = node, 
                         ank_version = ank_version,
                         date = date,
-                        ))
+                        )
+                    if len(rendered_template) > 0:
+                        print "3", node, template_file
+                        dst_fh.write(rendered_template)
+
+            remove_empty_folders(render_base_output_dir)
         return
 
 def cache_folders(nidb):
@@ -250,7 +265,6 @@ def render(nidb):
 
     folder_cache_dir = folder_cache['_folder_cache_dir']
     shutil.rmtree(folder_cache_dir)
-
 
 def render_single(nidb, folder_cache):
     for node in sorted(nidb):
@@ -330,22 +344,24 @@ def render_topology(topology):
 
     #TODO: capture mako errors better
 
-    with open( dst_file, 'wb') as dst_fh:
-        try:
-            dst_fh.write(render_template.render(
-                topology = topology,
-                ank_version = ank_version,
-                date = date,
-                ))
-        except KeyError, error:
-            log.warning( "Unable to render %s: %s not set" % (topology, error))
-        except AttributeError, error:
-            log.warning( "Unable to render %s: %s " % (topology, error))
-        except NameError, error:
-            log.warning( "Unable to render %s: %s. Check all variables used are defined" % (topology, error))
-        except TypeError, error:
-            log.warning( "Unable to render topology: %s." % (error))
-            from mako import exceptions
-            log.warning(exceptions.text_error_template().render())
+    try:
+        rendered_template = render_template.render(
+            topology = topology,
+            ank_version = ank_version,
+            date = date,
+            )
+        if len(rendered_template) > 0:
+            with open( dst_file, 'wb') as dst_fh:
+                dst_fh.write(rendered_template)
+    except KeyError, error:
+        log.warning( "Unable to render %s: %s not set" % (topology, error))
+    except AttributeError, error:
+        log.warning( "Unable to render %s: %s " % (topology, error))
+    except NameError, error:
+        log.warning( "Unable to render %s: %s. Check all variables used are defined" % (topology, error))
+    except TypeError, error:
+        log.warning( "Unable to render topology: %s." % (error))
+        from mako import exceptions
+        log.warning(exceptions.text_error_template().render())
 
 

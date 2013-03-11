@@ -41,7 +41,7 @@ def file_monitor(filename):
         yield False
 
 
-def manage_network(input_graph_string, timestamp, build_options, reload_build=False, grid = None):
+def manage_network(input_graph_string, timestamp, build_options, reload_build=False, grid = None, ssh_pub_key = None):
     """Build, compile, render network as appropriate"""
     # import build_network_simple as build_network
     import autonetkit.build_network as build_network
@@ -66,7 +66,7 @@ def manage_network(input_graph_string, timestamp, build_options, reload_build=Fa
     if build_options['compile']:
         if build_options['archive']:
             anm.save()
-        nidb = compile_network(anm)
+        nidb = compile_network(anm, ssh_pub_key = ssh_pub_key)
         body = ank_json.dumps(anm, nidb)
         messaging.publish_compressed("www", "client", body)
         log.debug("Sent ANM to web server")
@@ -123,17 +123,16 @@ def parse_options():
                              help="Load topology from STDIN")
 
     # TODO: move from -f to -i for --input
-    parser.add_argument(
-        '--monitor', '-m', action="store_true", default=False,
-        help="Monitor input file for changes")
+    parser.add_argument('--monitor', '-m', action="store_true",
+                        default=False, help="Monitor input file for changes")
     parser.add_argument('--debug', action="store_true",
                         default=False, help="Debug mode")
-    parser.add_argument('--diff', action="store_true", default=False,
-                        help="Diff NIDB")
+    parser.add_argument('--diff', action="store_true", 
+                        default=False, help="Diff NIDB")
     parser.add_argument('--compile', action="store_true",
                         default=False, help="Compile")
-    parser.add_argument(
-        '--build', action="store_true", default=False, help="Build")
+    parser.add_argument('--build', action="store_true",
+                        default=False, help="Build")
     parser.add_argument('--render', action="store_true",
                         default=False, help="Compile")
     parser.add_argument('--deploy', action="store_true",
@@ -142,7 +141,10 @@ def parse_options():
                         help="Archive ANM, NIDB, and IP allocations")
     parser.add_argument('--measure', action="store_true",
                         default=False, help="Measure")
-    parser.add_argument('--webserver', action="store_true", default=False, help="Webserver")
+    parser.add_argument('--ssh_key', action="store", 
+                        default="system", help="Choose ssh pub key file for quicker authentication. Takes 'none', 'system' (default, from ~/.ssh/) or an absolute file path.")
+    parser.add_argument('--webserver', action="store_true", 
+                        default=False, help="Webserver")
     parser.add_argument('--grid', type=int, help="Webserver")
     arguments = parser.parse_args()
     return arguments
@@ -194,7 +196,30 @@ def main():
         log.info("No input file specified. Exiting")
         raise SystemExit
 
-    manage_network(input_string, timestamp, build_options=build_options, grid = options.grid)
+    print options.ssh_key
+    if options.ssh_key.lower() == "system":
+        home_ssh_dir = os.path.join(os.getenv("USERPROFILE") or os.getenv("HOME"), ".ssh/")
+        home_ssh_file = os.path.join(home_ssh_dir, "id_dsa.pub")
+        if os.path.isfile(home_ssh_file):
+            log.info("Taking ssh pub key from %s" % home_ssh_file)
+            with open(home_ssh_file, "rb") as f:
+                ssh_pub = f.read().strip()
+        home_ssh_file = os.path.join(home_ssh_dir, "id_rsa.pub")
+        if os.path.isfile(home_ssh_file):
+            log.info("Taking ssh pub key from %s" % home_ssh_file)
+            with open(home_ssh_file, "rb") as f:
+                ssh_pub = f.read().strip()
+    elif options.ssh_key.lower() == "none":
+        ssh_pub = None # just for the case there is a file called "false"
+    elif os.path.isfile(options.ssh_key):
+        log.info("Taking ssh pub key from %s" % options.ssh_key)
+        with open(options.ssh_key, "rb") as f:
+            ssh_pub = f.read().strip()
+    else:
+        log.warn("Illegal string for --ssh_key: \n%s" % options.ssh_key)
+        ssh_pub = None
+
+    manage_network(input_string, timestamp, build_options=build_options, grid = options.grid, ssh_pub_key = ssh_pub)
 
 
 # TODO: work out why build_options is being clobbered for monitor mode
@@ -234,7 +259,7 @@ def main():
             log.info("Exiting")
 
 
-def compile_network(anm):
+def compile_network(anm, ssh_pub_key = None ):
     nidb = NIDB()
     g_phy = anm['phy']
     g_ipv4 = anm['ipv4']
@@ -261,7 +286,7 @@ def compile_network(anm):
         host = target_data['host']
         platform = target_data['platform']
         if platform == "netkit":
-            platform_compiler = compiler.NetkitCompiler(nidb, anm, host)
+            platform_compiler = compiler.NetkitCompiler(nidb, anm, host, ssh_pub_key = ssh_pub_key)
         elif platform == "cisco":
             platform_compiler = compiler.CiscoCompiler(nidb, anm, host)
         elif platform == "dynagen":

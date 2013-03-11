@@ -219,6 +219,8 @@ class QuaggaCompiler(RouterCompiler):
         super(QuaggaCompiler, self).compile(node)
         if node in self.anm['isis']:
             self.isis(node)
+        if node in self.anm['dns']:
+            self.dns(node)
 
     def interfaces(self, node):
         """Quagga interface compiler"""
@@ -286,7 +288,28 @@ class QuaggaCompiler(RouterCompiler):
         isis_node = g_isis.node(node)
         node.isis.net = isis_node.net
         node.isis.process_id = isis_node.process_id
-        
+
+    def dns(self, node):
+        g_dns = self.anm['dns']
+        dns_node = g_dns.node(node)
+
+        if dns_node.dns_role == "server":
+            node.dns.role = "server"
+            node.dns.entries = dns_node.name_space[dns_node.asn]
+            if dns_node.dns_type == "powerdns":
+                node.dns.caching = dns_node.caching
+                node.dns.pipe_command = None
+        elif dns_node.dns_role == "recursor":
+            node.dns.role = "recursor"
+            node.dns.forward_zones = dns_node.forward_zones
+            if dns_node.dns_type == "powerdns":
+                node.dns.caching = dns_node.caching
+        elif dns_node.dns_role == "client":
+            node.dns.role = "client"
+            node.dns.nameserver = dns_node.dns_dst
+            node.dns.tld = dns_node.tld
+        else:
+            node.dns.role = None
 
 # TODO: Don't render netkit lab topology if no netkit hosts
 
@@ -557,12 +580,17 @@ class JunosphereCompiler(PlatformCompiler):
 
 class NetkitCompiler(PlatformCompiler):
     """Netkit Platform Compiler"""
+    def __init__(self, nidb, anm, host, ssh_pub_key = None):
+        super(NetkitCompiler, self).__init__(nidb, anm, host)
+        self.ssh_pub_key = ssh_pub_key
+
     @staticmethod
     def interface_ids():
         for x in itertools.count(0):
             yield "eth%s" % x
 
     def compile(self):
+        print self.ssh_pub_key
         log.info("Compiling Netkit for %s" % self.host)
         g_phy = self.anm['phy']
         quagga_compiler = QuaggaCompiler(self.nidb, self.anm)
@@ -577,6 +605,8 @@ class NetkitCompiler(PlatformCompiler):
             nidb_node.render.base_dst_folder = "rendered/%s/%s/%s" % (
                 self.host, "netkit", folder_name)
             nidb_node.render.dst_file = "%s.startup" % folder_name
+            if self.ssh_pub_key:
+                nidb_node.ssh.key = self.ssh_pub_key
 
 # allocate zebra information
             nidb_node.zebra.password = "1234"
@@ -584,7 +614,6 @@ class NetkitCompiler(PlatformCompiler):
             if hostname[0] in string.digits:
                 hostname = "r" + hostname
             nidb_node.zebra.hostname = hostname  # can't have . in quagga hostnames
-            nidb_node.ssh.use_key = True  # TODO: make this set based on presence of key
 
             # Note this could take external data
             int_ids = self.interface_ids()

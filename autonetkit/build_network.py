@@ -719,28 +719,37 @@ def build_dns(anm):
     def get_dst(src, possible_dst):
         return g_ipv4.node(get_first_dst(src, possible_dst)).loopback
 
-    for _, devices in g_dns.groupby("asn").items():
+    for asn, devices in g_dns.groupby("asn").items():
         as_graph = g_dns.subgraph(devices)
         name_space = [(str(node["dns2"]), g_ipv4.node(node).loopback) for node in as_graph.nodes(dns = "destination")]
             
-        for node in as_graph.nodes(dns = "server"):
-            node.dns_entries = name_space
+        for node in as_graph.nodes(dns="server"):
+            node.name_space = name_space 
             node.caching = False
 
-        for node in as_graph.nodes(dns = "recursor"):
+        for node in as_graph.nodes(dns="recursor"):
             node.caching = False
-            node.forward_zones = forward_zones 
+            node.forward_zones = forward_zones
 
         try: 
             for cli in as_graph.nodes(dns = "client"):
                 cli.dns_dst = get_dst(cli, as_graph.nodes(dns = "recursor"))
+                cli.tld = "as%d" % (cli.asn,)
         except StopIteration:
             try: 
                 for cli in as_graph.nodes(dns = "client"):
                     cli.dns_dst = get_dst(cli, as_graph.nodes(dns = "server"))
+                    cli.tld = "as%d" % (cli.asn,)
             except StopIteration:
                 log.warn("No dns server defined!")
                 sys.exit(1)
+
+    for node in g_dns:
+        node.dns_role = g_dns._graph.node[str(node)]["dns"]
+        node.dns_type = g_dns._graph.node[str(node)]["dns2"]
+
+    print str(dir(g_dns))
+
 
 def update_messaging(anm):
     """Sends ANM to web server"""
