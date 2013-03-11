@@ -196,7 +196,6 @@ def main():
         log.info("No input file specified. Exiting")
         raise SystemExit
 
-    print options.ssh_key
     if options.ssh_key.lower() == "system":
         home_ssh_dir = os.path.join(os.getenv("USERPROFILE") or os.getenv("HOME"), ".ssh/")
         home_ssh_file = os.path.join(home_ssh_dir, "id_dsa.pub")
