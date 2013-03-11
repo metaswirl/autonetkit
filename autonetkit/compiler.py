@@ -616,10 +616,8 @@ class NetkitCompiler(PlatformCompiler):
             nidb_node = self.nidb.node(phy_node)
             nidb_node.render.base = "templates/quagga"
             nidb_node.render.template = "templates/netkit_startup.mako"
-            nidb_node.render.dst_folder = "rendered/%s/%s" % (
-                self.host, "netkit")
-            nidb_node.render.base_dst_folder = "rendered/%s/%s/%s" % (
-                self.host, "netkit", folder_name)
+            nidb_node.render.dst_folder = "rendered/%s_netkit" % (self.host)
+            nidb_node.render.base_dst_folder = "rendered/%s_netkit/%s" % (self.host, folder_name)
             nidb_node.render.dst_file = "%s.startup" % folder_name
             if self.ssh_pub_key:
                 nidb_node.ssh.key = self.ssh_pub_key
@@ -667,8 +665,7 @@ class NetkitCompiler(PlatformCompiler):
 # TODO: replace name/label and use attribute from subgraph
         lab_topology = self.nidb.topology[self.host]
         lab_topology.render_template = "templates/netkit_lab_conf.mako"
-        lab_topology.render_dst_folder = "rendered/%s/%s" % (
-            self.host, "netkit")
+        lab_topology.render_dst_folder = "rendered/%s_netkit" % (self.host)
         lab_topology.render_dst_file = "lab.conf"
         lab_topology.description = "AutoNetkit Lab"
         lab_topology.author = "AutoNetkit"

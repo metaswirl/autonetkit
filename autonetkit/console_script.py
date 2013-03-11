@@ -316,7 +316,7 @@ def deploy_network(anm, nidb, input_graph_string):
                 log.debug("Not deploying to %s on %s" % (platform, hostname))
                 continue
 
-            config_path = os.path.join("rendered", hostname, platform)
+            config_path = os.path.join("rendered", "%s_netkit" % (self.host))
 
             if hostname == "internal":
                 try:
