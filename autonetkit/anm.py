@@ -12,10 +12,8 @@ try:
 except ImportError:
     import pickle
 
-
 class AutoNetkitException(Exception):
     pass
-
 
 class OverlayNotFound(AutoNetkitException):
     def __init__(self, errors):
@@ -24,7 +22,7 @@ class OverlayNotFound(AutoNetkitException):
     def __str__(self):
         return "Overlay %s not found" % self.Errors
 
-
+#TODO: rename to OverlayInterface
 class overlay_interface(object):
     def __init__(self, anm, overlay_id, node_id, interface_id):
         object.__setattr__(self, 'anm', anm)
@@ -36,10 +34,20 @@ class overlay_interface(object):
         description = self.description or self.interface_id
         return "(%s, %s)" % (self.node_id, description)
 
+    def __eq__(self, other):
+        return (self.node_id, self.interface_id) == (other.node_id, other.interface_id)
+
     def __nonzero__(self):
-        """Allows for checking if node exists
-        """
         return len(self._interface) > 0  # if interface data set
+
+    def __lt__(self, other):
+        #TODO: check how is comparing the nodes
+        return ((self.node, self.interface_id) < (other.node, other.interface_id))
+
+    @property
+    def is_bound(self):
+        """Returns if this interface is bound to an edge on this layer"""
+        return len(self.edges()) > 0
 
     def __str__(self):
         return self.__repr__()
@@ -51,12 +59,12 @@ class overlay_interface(object):
 
     @property
     def _node(self):
-        """Return graph the node belongs to"""
+        """Return graph data the node belongs to"""
         return self._graph.node[self.node_id]
 
     @property
     def _interface(self):
-        """Return graph the node belongs to"""
+        """Return data dict for the interface"""
         return self._node["_interfaces"][self.interface_id]
 
     @property
@@ -74,6 +82,11 @@ class overlay_interface(object):
                     % (self, overlay_id))
             return None
 
+        if not self.node_id in self.anm.overlay_nx_graphs[overlay_id]:
+            log.debug("Trying to access interface %s for non-existent node %s in overlay %s" 
+                    % (self, self.node_id, self.overlay_id))
+            return None
+
         try:
             return overlay_interface(self.anm, overlay_id, self.node_id, self.interface_id)
         except KeyError:
@@ -85,6 +98,11 @@ class overlay_interface(object):
         return self.type == "loopback" or self.phy.type == "loopback"
 
     @property
+    def is_physical(self):
+        """"""
+        return self.type == "physical" or self.phy.type == "physical"
+
+    @property
     def description(self):
         """"""
         retval = self._interface.get("description")
@@ -93,6 +111,28 @@ class overlay_interface(object):
 
         if self.overlay_id != "phy":  # prevent recursion
             self.phy._interface.get("description")
+
+    @property
+    def is_loopback_zero(self):
+        return self.interface_id == 0 and self.is_loopback
+
+    @property
+    def type(self):
+        """"""
+#TODO: make 0 correctly access interface 0 -> copying problem
+# TODO: this needs a bugfix rather than the below hard-coded workaround
+        if self.interface_id == 0:
+            return "loopback"
+
+        if self.overlay_id != "phy":  # prevent recursion
+            return self.phy._interface.get("type")
+
+        retval = self._interface.get("type")
+        if retval:
+            return retval
+
+        if self.overlay_id != "phy":  # prevent recursion
+            return self.phy._interface.get("type")
 
     @property
     def node(self):
@@ -135,7 +175,6 @@ class overlay_interface(object):
                 and e._interfaces[self.node_id] == self.interface_id]
         return valid_edges
 
-
 @functools.total_ordering
 class OverlayNode(object):
     def __init__(self, anm, overlay_id, node_id):
@@ -153,7 +192,8 @@ class OverlayNode(object):
         return self.node_id in self._graph
 
     def __iter__(self):
-        return self.interfaces()
+        """Shortcut to iterate over the physical interfaces of this node"""
+        return self.interfaces(type="physical")
 
     def __getnewargs__(self):
         return ()
@@ -174,6 +214,18 @@ class OverlayNode(object):
             return self.node_id == other.node_id
         except AttributeError:
             return self.node_id == other
+
+    @property
+    def loopback_zero(self):
+        return (i for i in self.interfaces("is_loopback_zero")).next()
+
+    @property
+    def physical_interfaces(self):
+        return self.interfaces(type = "physical")
+
+    @property
+    def loopback_interfaces(self):
+        return self.interfaces(type = "loopback")
 
     def __lt__(self, other):
 # want [r1, r2, ..., r11, r12, ..., r21, r22] not [r1, r11, r12, r2, r21, r22]
@@ -206,10 +258,10 @@ class OverlayNode(object):
                 return int_id
 
     # TODO: interface function access needs to be cleaned up
-    def _add_interface(self, type="physical", description=None, **kwargs):
+    def _add_interface(self, description=None, type="physical", **kwargs):
         data = dict(kwargs)
 
-        if self.node_id != 'phy' and self.phy:
+        if self.overlay_id != 'phy' and self.phy:
             next_id = self.phy._next_int_id
             self.phy._interfaces[next_id] = {'type': type,
                                              'description': description} 
@@ -340,6 +392,15 @@ class OverlayNode(object):
         neighs = self._overlay.neighbors(self)
         return self._overlay.filter(neighs, *args, **kwargs)
 
+    def neighbor_interfaces(self, *args, **kwargs):
+        #TODO: implement filtering for args and kwargs
+        if len(args) or len(kwargs):
+            log.warning("Attribute-based filtering not currently supported" 
+                    " for neighbor_interfaces")
+
+        return iter(edge.dst_int for edge in self.edges())
+
+
     @property
     def label(self):
         """Returns node label (mapped from ANM)"""
@@ -410,6 +471,12 @@ class OverlayEdge(object):
         object.__setattr__(self, 'src_id', src_id)
         object.__setattr__(self, 'dst_id', dst_id)
 
+    def __eq__(self, other):
+        try:
+            return (self.src_id, self.dst_id) == (other.src_id, other.dst_id)
+        except AttributeError:
+            return self.node_id == other
+
     def __repr__(self):
         """String of node"""
         return "%s: (%s, %s)" % (self.overlay_id, self.src, self.dst)
@@ -448,6 +515,18 @@ class OverlayEdge(object):
         """Destination node of edge"""
         return OverlayNode(self.anm, self.overlay_id, self.dst_id)
 
+    @property
+    def src_int(self):
+        """Interface bound to source node of edge"""
+        src_int_id = self._interfaces[self.src_id]
+        return overlay_interface(self.anm, self.overlay_id, self.src_id, src_int_id) 
+
+    @property
+    def dst_int(self):
+        """Interface bound to destination node of edge"""
+        dst_int_id = self._interfaces[self.dst_id]
+        return overlay_interface(self.anm, self.overlay_id, self.dst_id, dst_int_id) 
+
     def attr_equal(self, *args):
         """Return edges which both src and dst have attributes equal"""
         return all(getattr(self.src, key) == getattr(self.dst, key) 
@@ -474,6 +553,11 @@ class OverlayEdge(object):
     def bind_interface(self, node, interface):
         """Bind this edge to specified index"""
         self._interfaces[node.id] = interface
+
+    def interfaces(self):
+        #TODO: warn if interface doesn't exist on node
+        return iter(overlay_interface(self.anm, self.overlay_id, node_id, interface_id) 
+                for (node_id, interface_id) in self._interfaces.items())
 
     @property
     def _graph(self):
@@ -544,6 +628,10 @@ class OverlayBase(object):
 
     def __contains__(self, n):
         return n.node_id in self._graph
+
+    def interface(self, interface):
+        return overlay_interface(self._anm, self._overlay_id,
+                interface.node_id, interface.interface_id)
 
     def edge(self, edge_to_find, dst_to_find=None):
         """returns edge in this graph with same src and same edge_id"""
@@ -814,6 +902,7 @@ class OverlayGraph(OverlayBase):
                     'description': None,
                     'type': 'physical',
                 }
+                # need to do dict() to copy, otherwise all point to same memory location -> clobber
                 data = dict(
                     (key, dict(interface_data)) for key in phy_interfaces)
                 self._graph.node[node]['_interfaces'] = data
@@ -822,20 +911,24 @@ class OverlayGraph(OverlayBase):
                 log.debug("Initialise interfaces for %s in %s" % (
                     node, self._overlay_id))
                 self._graph.node[node]['_interfaces'] = {0:
-                                                         {'description': 
-                                                             'loopback'}}
+                                                         {'description': 'loopback',
+                                                             'type': 'loopback'}}
 
     def allocate_interfaces(self):
         """allocates edges to interfaces"""
         # int_counter = (n for n in itertools.count() if n not in
         self._init_interfaces()
 
-        ebunch = (e for e in self.edges())
+        def numeric_id(edge):
+            return int(edge.edge_id.split("_")[0])
+
+        ebunch = sorted(self.edges(), key = numeric_id)
+
         for edge in ebunch:
             src = edge.src
             dst = edge.dst
-            src_int_id = src._add_interface('link to %s' % dst)
-            dst_int_id = dst._add_interface('link to %s' % src)
+            src_int_id = src._add_interface('%s to %s' % (src, dst))
+            dst_int_id = dst._add_interface('%s to %s' % (dst, src))
             edge._interfaces = {}
             edge._interfaces[src.id] = src_int_id
             edge._interfaces[dst.id] = dst_int_id
@@ -901,8 +994,7 @@ class OverlayGraph(OverlayBase):
             else:
                 ebunch = [(e.src.node_id, e.dst.node_id, {}) for e in ebunch]
         except AttributeError:
-            data = {"_interfaces": {}}
-            ebunch = [(src.node_id, dst.node_id, data) for src, dst in ebunch]
+            ebunch = [(src.node_id, dst.node_id, {"_interfaces": {}}) for src, dst in ebunch]
 
         ebunch = [(src, dst, data) for (src, dst, data)
                   in ebunch if src in self._graph and dst in self._graph]

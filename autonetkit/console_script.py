@@ -63,6 +63,10 @@ def manage_network(input_graph_string, timestamp, hosts, build_options, reload_b
             body = ank_json.dumps(anm)
             messaging.publish_compressed("www", "client", body)
 
+    if build_options['validate']:
+        import validate
+        validate.validate(anm)
+
     if build_options['compile']:
         if build_options['archive']:
             anm.save()
@@ -131,10 +135,9 @@ def parse_options():
                         default=False, help="Diff NIDB")
     parser.add_argument('--compile', action="store_true",
                         default=False, help="Compile")
-    parser.add_argument('--build', action="store_true",
-                        default=False, help="Build")
-    parser.add_argument('--render', action="store_true",
-                        default=False, help="Compile")
+    parser.add_argument('--build', action="store_true", default=False, help="Build")
+    parser.add_argument('--render', action="store_true", default=False, help="Compile")
+    parser.add_argument('--validate', action="store_true", default=False, help="Validate")
     parser.add_argument('--deploy', action="store_true",
                         default=False, help="Deploy")
     parser.add_argument('--archive', action="store_true", default=False,
@@ -168,6 +171,7 @@ def main():
     build_options = {
         'compile': options.compile or settings['General']['compile'],
         'render': options.render or settings['General']['render'],
+        'validate': options.validate or settings['General']['validate'],
         'build': options.build or settings['General']['build'],
         'deploy': options.deploy or settings['General']['deploy'],
         'measure': options.measure or settings['General']['measure'],
@@ -175,6 +179,7 @@ def main():
         'diff': options.diff or settings['General']['diff'],
         'archive': options.archive or settings['General']['archive'],
     }
+
 
     if options.webserver:
         log.info("Webserver not yet supported, please run as seperate module")
@@ -264,21 +269,20 @@ def main():
 def compile_network(anm, hosts, ssh_pub_key = None ):
     nidb = NIDB()
     g_phy = anm['phy']
-    g_ipv4 = anm['ipv4']
+    g_ip = anm['ip']
     g_graphics = anm['graphics']
 # TODO: build this on a platform by platform basis
     nidb.add_nodes_from(
         g_phy, retain=['label', 'host', 'platform', 'Network', 'update'])
 
-    cd_nodes = [n for n in g_ipv4.nodes(
+    cd_nodes = [n for n in g_ip.nodes(
         "collision_domain") if not n.is_switch]  # Only add created cds - otherwise overwrite host of switched
     nidb.add_nodes_from(
         cd_nodes, retain=['label', 'host'], collision_domain=True)
 # add edges to switches
-    edges_to_add = [edge for edge in g_phy.edges(
-    ) if edge.src.is_switch or edge.dst.is_switch]
-    edges_to_add += [edge for edge in g_ipv4.edges(
-    ) if edge.src.collision_domain or edge.dst.collision_domain]
+    edges_to_add = [edge for edge in g_phy.edges()
+            if edge.src.is_switch or edge.dst.is_switch]
+    edges_to_add += [edge for edge in g_ip.edges() if edge.split] # cd edges from split
     nidb.add_edges_from(edges_to_add, retain='edge_id')
 
 # TODO: boundaries is still a work in progress...
@@ -335,19 +339,6 @@ def deploy_network(anm, nidb, input_graph_string, hosts):
             continue
 
         config_path = os.path.join("rendered", "%s_%s" % (target, platform))
-
-        # How does this fit here?
-        #if hostname == "internal":
-        #    try:
-        #        from autonetkit_cisco import deploy as cisco_deploy
-        #    except ImportError:
-        #        pass  # development module, may not be available
-        #    if platform == "cisco":
-        #        if input_graph_string: # input xml file
-        #            cisco_deploy.package(nidb, config_path, input_graph_string)
-        #        else:
-        #            cisco_deploy.create_xml(anm, nidb, input_graph_string)
-        #    continue
         
         if not target == "localhost":
             try:
@@ -365,6 +356,18 @@ def deploy_network(anm, nidb, input_graph_string, hosts):
         except KeyError:
             key_file = ""
 
+        if host == "internal":
+            try:
+                from autonetkit_cisco import deploy as cisco_deploy
+            except ImportError:
+                pass  # development module, may not be available
+            if platform == "cisco":
+                if input_graph_string: # input xml file
+                    cisco_deploy.package(nidb, config_path, input_graph_string)
+                else:
+                    cisco_deploy.create_xml(anm, nidb, input_graph_string)
+            continue
+
         if platform == "netkit":
             import autonetkit.deploy.netkit as netkit_deploy
             tar_file = netkit_deploy.package(config_path, "nklab")
@@ -373,7 +376,6 @@ def deploy_network(anm, nidb, input_graph_string, hosts):
                                 config_path, timeout=60, key_filename=key_file)
         if platform == "cisco":
             cisco_deploy.package(config_path, "nklab")
-
 
 def measure_network(nidb):
     import autonetkit.measure as measure
