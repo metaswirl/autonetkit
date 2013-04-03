@@ -41,7 +41,7 @@ def file_monitor(filename):
         yield False
 
 
-def manage_network(input_graph_string, timestamp, build_options, reload_build=False, grid = None, ssh_pub_key = None):
+def manage_network(input_graph_string, timestamp, hosts, build_options, reload_build=False, grid = None, ssh_pub_key = None):
     """Build, compile, render network as appropriate"""
     # import build_network_simple as build_network
     import autonetkit.build_network as build_network
@@ -66,7 +66,7 @@ def manage_network(input_graph_string, timestamp, build_options, reload_build=Fa
     if build_options['compile']:
         if build_options['archive']:
             anm.save()
-        nidb = compile_network(anm, ssh_pub_key = ssh_pub_key)
+        nidb = compile_network(anm, hosts, ssh_pub_key = ssh_pub_key)
         body = ank_json.dumps(anm, nidb)
         messaging.publish_compressed("www", "client", body)
         log.debug("Sent ANM to web server")
@@ -101,7 +101,7 @@ def manage_network(input_graph_string, timestamp, build_options, reload_build=Fa
     # updated, eg for deploy
 
     if build_options['deploy']:
-        deploy_network(anm, nidb, input_graph_string)
+        deploy_network(anm, nidb, input_graph_string, hosts)
 
     if build_options['measure']:
         measure_network(nidb)
@@ -141,6 +141,8 @@ def parse_options():
                         help="Archive ANM, NIDB, and IP allocations")
     parser.add_argument('--measure', action="store_true",
                         default=False, help="Measure")
+    parser.add_argument('--hosts', action="store", 
+                        default="localhost", help="Choose single or list of hosts (a,b,c) defined in the configuration file")
     parser.add_argument('--ssh_key', action="store", 
                         default="system", help="Choose ssh pub key file for quicker authentication. Takes 'none', 'system' (default, from ~/.ssh/) or an absolute file path.")
     parser.add_argument('--webserver', action="store_true", 
@@ -148,7 +150,6 @@ def parse_options():
     parser.add_argument('--grid', type=int, help="Webserver")
     arguments = parser.parse_args()
     return arguments
-
 
 def main():
     settings = config.settings
@@ -215,10 +216,12 @@ def main():
         with open(options.ssh_key, "rb") as f:
             ssh_pub = f.read().strip()
     else:
-        log.warn("Illegal string for --ssh_key: \n%s" % options.ssh_key)
+        log.warning("Illegal string for --ssh_key: \n%s" % options.ssh_key)
         ssh_pub = None
 
-    manage_network(input_string, timestamp, build_options=build_options, grid = options.grid, ssh_pub_key = ssh_pub)
+    hosts = options.hosts.lower().split(",")
+
+    manage_network(input_string, timestamp, hosts, build_options=build_options, grid = options.grid, ssh_pub_key = ssh_pub )
 
 
 # TODO: work out why build_options is being clobbered for monitor mode
@@ -247,7 +250,7 @@ def main():
                         with open(options.file, "r") as fh:
                             input_string = fh.read()  # read updates
                         manage_network(input_string,
-                                       timestamp, build_options, reload_build)
+                                       timestamp, hosts, build_options, reload_build)
                         log.info("Monitoring for updates...")
                     except Exception, e:
                         log.warning("Unable to build network %s" %e)
@@ -258,7 +261,7 @@ def main():
             log.info("Exiting")
 
 
-def compile_network(anm, ssh_pub_key = None ):
+def compile_network(anm, hosts, ssh_pub_key = None ):
     nidb = NIDB()
     g_phy = anm['phy']
     g_ipv4 = anm['ipv4']
@@ -281,68 +284,95 @@ def compile_network(anm, ssh_pub_key = None ):
 # TODO: boundaries is still a work in progress...
     nidb.copy_graphics(g_graphics)
 
-    for target, target_data in config.settings['Compile Targets'].items():
-        host = target_data['host']
-        platform = target_data['platform']
-        if platform == "netkit":
-            platform_compiler = compiler.NetkitCompiler(nidb, anm, host, ssh_pub_key = ssh_pub_key)
-        elif platform == "cisco":
-            platform_compiler = compiler.CiscoCompiler(nidb, anm, host)
-        elif platform == "dynagen":
-            platform_compiler = compiler.DynagenCompiler(nidb, anm, host)
-        elif platform == "junosphere":
-            platform_compiler = compiler.JunosphereCompiler(nidb, anm, host)
+    for target in hosts:
+        try:
+            target_data = config.settings['Hosts'][target]
+        except KeyError:
+            log.warning("Host %s not defined in configuration" % target)
+            continue
 
-        if any(g_phy.nodes(host=host, platform=platform)):
-            log.info("Compile for %s on %s" % (platform, host))
-            platform_compiler.compile()  # only compile if hosts set
-        else:
-            log.debug("No devices set for %s on %s" % (platform, host))
+        try:
+            platform = target_data['platform']
+        except KeyError:
+            log.warning("no platform defined for %s" % target)
+            continue
+
+        if platform == "netkit":
+            platform_compiler = compiler.NetkitCompiler(nidb, anm, target, ssh_pub_key = ssh_pub_key)
+        elif platform == "cisco":
+            platform_compiler = compiler.CiscoCompiler(nidb, anm, target)
+        elif platform == "dynagen":
+            platform_compiler = compiler.DynagenCompiler(nidb, anm, target)
+        elif platform == "junosphere":
+            platform_compiler = compiler.JunosphereCompiler(nidb, anm, target)
+
+        platform_compiler.compile()
+        #if any(g_phy.nodes(host=target, platform=platform)): # this is really problematic
+        #    log.info("Compile for %s on %s" % (platform, target))
+        #    platform_compiler.compile()  # only compile if host set
+        #else:
+        #    log.debug("No devices set for %s on %s" % (platform, target))
 
     return nidb
 
 
-def deploy_network(anm, nidb, input_graph_string):
+def deploy_network(anm, nidb, input_graph_string, hosts):
 
     # TODO: make this driven from config file
     log.info("Deploying network")
 
-# TODO: pick up platform, host, filenames from nidb (as set in there)
-    deploy_hosts = config.settings['Deploy Hosts']
-    for hostname, host_data in deploy_hosts.items():
-        for platform, platform_data in host_data.items():
+    for target in hosts:
+        try:
+            target_data = config.settings['Hosts'][target]
+        except KeyError:
+            log.warning("Host %s not defined in configuration" % target)
+            continue
 
-            if not platform_data['deploy']:
-                log.debug("Not deploying to %s on %s" % (platform, hostname))
-                continue
+        try:
+            platform = target_data['platform']
+        except KeyError:
+            log.warning("no platform defined for %s" % target)
+            continue
 
-            config_path = os.path.join("rendered", "%s_netkit" % (self.host))
+        config_path = os.path.join("rendered", "%s_%s" % (target, platform))
 
-            if hostname == "internal":
-                try:
-                    from autonetkit_cisco import deploy as cisco_deploy
-                except ImportError:
-                    pass  # development module, may not be available
-                if platform == "cisco":
-                    if input_graph_string: # input xml file
-                        cisco_deploy.package(nidb, config_path, input_graph_string)
-                    else:
-                        cisco_deploy.create_xml(anm, nidb, input_graph_string)
-                continue
+        # How does this fit here?
+        #if hostname == "internal":
+        #    try:
+        #        from autonetkit_cisco import deploy as cisco_deploy
+        #    except ImportError:
+        #        pass  # development module, may not be available
+        #    if platform == "cisco":
+        #        if input_graph_string: # input xml file
+        #            cisco_deploy.package(nidb, config_path, input_graph_string)
+        #        else:
+        #            cisco_deploy.create_xml(anm, nidb, input_graph_string)
+        #    continue
+        
+        if not target == "localhost":
+            try:
+                host = target_data['host']
+            except KeyError:
+                log.warning("Host %s has no address" % target)
 
-            username = platform_data['username']
-            key_file = platform_data['key file']
-            host = platform_data['host']
+        try: 
+            username = target_data['username'] or ""
+        except KeyError:
+            username = ""
+            
+        try:
+            key_file = target_data['key file'] or ""
+        except KeyError:
+            key_file = ""
 
-            if platform == "netkit":
-                import autonetkit.deploy.netkit as netkit_deploy
-                tar_file = netkit_deploy.package(config_path, "nklab")
-                netkit_deploy.transfer(
-                    host, username, tar_file, tar_file, key_file)
-                netkit_deploy.extract(host, username, tar_file,
-                                      config_path, timeout=60, key_filename=key_file)
-            if platform == "cisco":
-                cisco_deploy.package(config_path, "nklab")
+        if platform == "netkit":
+            import autonetkit.deploy.netkit as netkit_deploy
+            tar_file = netkit_deploy.package(config_path, "nklab")
+            netkit_deploy.transfer(host, username, tar_file, tar_file, key_file)
+            netkit_deploy.extract(host, username, tar_file,
+                                config_path, timeout=60, key_filename=key_file)
+        if platform == "cisco":
+            cisco_deploy.package(config_path, "nklab")
 
 
 def measure_network(nidb):

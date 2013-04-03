@@ -730,7 +730,7 @@ def build_dns(anm):
     # FIXME: g_dns.remove all with dns == "" or "none" or "None" 
     # TODO: define option to choose between destination selection mechanisms
 
-    forward_zones = [("as%d" % node.asn, g_ipv4.node(node).loopback) for node in g_dns.nodes(dns="server")]
+    forward_zones = [("cp%d" % node.asn, g_ipv4.node(node).loopback) for node in g_dns.nodes(dns="server")]
 
     def get_closest_dst(g_in, src, possible_dst):
         """ find closest node by hop_count """
@@ -765,14 +765,14 @@ def build_dns(anm):
         try: 
             for cli in as_graph.nodes(dns = "client"):
                 cli.dns_dst = get_dst(cli, as_graph.nodes(dns = "recursor"))
-                cli.tld = "as%d" % (cli.asn,)
+                cli.tld = "cp%d" % (cli.asn,)
         except StopIteration:
             try: 
                 for cli in as_graph.nodes(dns = "client"):
                     cli.dns_dst = get_dst(cli, as_graph.nodes(dns = "server"))
-                    cli.tld = "as%d" % (cli.asn,)
+                    cli.tld = "cp%d" % (cli.asn,)
             except StopIteration:
-                log.warn("No dns server defined!")
+                log.warning("No dns server defined!")
                 sys.exit(1)
 
     for node in g_dns:

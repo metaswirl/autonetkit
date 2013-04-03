@@ -611,7 +611,7 @@ class NetkitCompiler(PlatformCompiler):
         g_phy = self.anm['phy']
         quagga_compiler = QuaggaCompiler(self.nidb, self.anm)
 # TODO: this should be all l3 devices not just routers
-        for phy_node in g_phy.nodes('is_router', host=self.host, syntax='quagga'):
+        for phy_node in g_phy.nodes('is_router', syntax='quagga'):
             folder_name = naming.network_hostname(phy_node)
             nidb_node = self.nidb.node(phy_node)
             nidb_node.render.base = "templates/quagga"

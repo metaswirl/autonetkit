@@ -830,7 +830,7 @@ class NIDB_base(object):
                 add_nodes.append( (n.node_id, data) )
             nbunch = add_nodes
         else:
-            log.warn("Cannot add node ids directly to NIDB: must add overlay nodes")
+            log.warning("Cannot add node ids directly to NIDB: must add overlay nodes")
         self._graph.add_nodes_from(nbunch, **kwargs)
 
         for node in nodes_to_add:
