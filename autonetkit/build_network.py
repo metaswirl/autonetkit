@@ -826,6 +826,11 @@ def build_isis(anm):
         link.metric = 1  # default
         # link.hello = 5 # for debugging, TODO: read from graph
 
+    for edge in g_isis.edges():
+        for interface in edge.interfaces():
+            interface.metric = edge.metric
+            interface.multipoint = edge.multipoint
+
 def build_dns(anm):
     """Build dns overlay"""
     # Annahme: Ein DNS Server per AS
@@ -888,13 +893,6 @@ def build_dns(anm):
     for node in g_dns:
         node.dns_role = g_dns._graph.node[str(node)]["dns"]
         node.dns_type = g_dns._graph.node[str(node)]["dns2"]
-
-
-    for edge in g_isis.edges():
-        for interface in edge.interfaces():
-            interface.metric = edge.metric
-            interface.multipoint = edge.multipoint
-
 
 def update_messaging(anm):
     """Sends ANM to web server"""
