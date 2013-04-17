@@ -920,7 +920,7 @@ class OverlayGraph(OverlayBase):
         self._init_interfaces()
 
         def numeric_id(edge):
-            return int(edge.edge_id.split("_")[0])
+            return edge.edge_id.split("_")[0]
 
         ebunch = sorted(self.edges(), key = numeric_id)
 

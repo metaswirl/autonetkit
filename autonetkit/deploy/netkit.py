@@ -82,9 +82,11 @@ def extract(host, username, tar_file, cd_dir, timeout = 45, key_filename = None,
         conn.add_monitor(r'make: not found', make_not_found)
         #conn.data_received_event.connect(data_received)
         conn.execute('cd %s' % cd_dir)
+        conn.execute('lhalt -q')
         conn.execute('lcrash -k')
         conn.execute("lclean")
         conn.execute('cd') # back to home directory tar file copied to
+        conn.execute('rm -Rf rendered')
         conn.execute('tar -xzf %s' % tar_file)
         conn.execute('cd %s' % cd_dir)
         conn.execute('vlist')
