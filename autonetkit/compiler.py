@@ -146,6 +146,17 @@ class RouterCompiler(object):
                 continue # don't configure IGP for this interface
             ipv4_int = g_ipv4.interface(interface)
             ospf_int = g_ospf.interface(interface)
+            if not ospf_int.is_bound:
+                continue # not an OSPF interface
+            try:
+                ospf_cost = int(ospf_int.cost)
+            except TypeError:
+                try:
+                    ospf_cost = netaddr.IPAddress(ospf_int.cost)
+                except TypeError:
+                    log.debug("Using default OSPF cost of 1 for %s on %s" % (ospf_int, node))
+                    ospf_cost = 1 # default
+            interface.ospf_cost = ospf_cost
             network = ipv4_int.subnet
             if (ospf_int and ospf_int.is_bound
                     and network not in added_networks):  # don't add more than once
@@ -296,10 +307,12 @@ class QuaggaCompiler(RouterCompiler):
         super(QuaggaCompiler, self).interfaces(node)
         # OSPF cost
 
+        # see yellow note!
+
         if phy_node.is_router:
             node.loopback_zero.id = self.lo_interface
             node.loopback_zero.description = "Loopback"
-            node.loopback_zero.ipv4_address=ipv4_node.loopback,
+            node.loopback_zero.ipv4_address=str(ipv4_node.loopback)
             node.loopback_zero.ipv4_subnet=node.loopback_subnet
 
     def ospf(self, node):
