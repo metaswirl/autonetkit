@@ -341,6 +341,8 @@ class QuaggaCompiler(RouterCompiler):
     def isis(self, node):
         """Sets ISIS links
         """
+        super(QuaggaCompiler, self).isis(node)
+
         g_isis = self.anm['isis']
         isis_node = g_isis.node(node)
         node.isis.net = isis_node.net
@@ -662,7 +664,7 @@ class NetkitCompiler(PlatformCompiler):
             or "172.16.0.0/16").iter_hosts() # added for backwards compatibility
         lab_topology.tap_host = address_block.next()
         lab_topology.tap_vm = address_block.next()  # for tunnel host
-        for node in sorted(self.nidb.nodes("is_l3device", host=self.host)):
+        for node in sorted(self.nidb.nodes("is_l3device")):
             # TODO: fix sorting order
             # TODO: check this works for switches
             node.tap.ip = address_block.next()
@@ -677,13 +679,13 @@ class NetkitCompiler(PlatformCompiler):
         lab_topology.author = "AutoNetkit"
         lab_topology.web = "www.autonetkit.org"
         host_nodes = list(
-            self.nidb.nodes(host=self.host, platform="netkit"))
+            self.nidb.nodes(platform="netkit")) 
         if not len(host_nodes):
             log.debug("No Netkit hosts for %s" % self.host)
             # TODO: make so can return here
             # return
 # also need collision domains for this host
-        cd_nodes = self.nidb.nodes("collision_domain", host=self.host)
+        cd_nodes = self.nidb.nodes("collision_domain") 
         host_nodes += cd_nodes
         subgraph = self.nidb.subgraph(host_nodes, self.host)
 
@@ -919,7 +921,7 @@ class DynagenCompiler(PlatformCompiler):
         # TODO: take tap subnet parameter
         con_ports = self.console_ports()
 
-        for node in sorted(self.nidb.nodes("is_l3device", host=self.host)):
+        for node in sorted(self.nidb.nodes("is_l3device")):
             # TODO: fix sorting order
             # TODO: check this works for switches
             node.console_port = con_ports.next()
