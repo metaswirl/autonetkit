@@ -6,7 +6,7 @@ except ImportError:
     pass # no pika installed, module will handle accordingly 
 import tornado
 import tornado.websocket as websocket
-from tornado.netutil import TCPServer
+from tornado.tcpserver import TCPServer
 import os
 import json
 import glob
