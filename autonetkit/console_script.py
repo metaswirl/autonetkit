@@ -6,6 +6,7 @@ import random
 import traceback
 from datetime import datetime
 import os
+import shutil
 import time
 import autonetkit.compiler as compiler
 import pkg_resources
@@ -300,6 +301,7 @@ def compile_network(anm, hosts, ssh_pub_key = None ):
         except KeyError:
             log.warning("no platform defined for %s" % target)
             continue
+        shutil.rmtree(os.path.join("rendered", "%s_%s" % (target, platform)), ignore_errors=True)
 
         if platform == "netkit":
             platform_compiler = compiler.NetkitCompiler(nidb, anm, target, ssh_pub_key = ssh_pub_key)
@@ -346,15 +348,19 @@ def deploy_network(anm, nidb, input_graph_string, hosts):
             except KeyError:
                 log.warning("Host %s has no address" % target)
 
-        try: 
-            username = target_data['username'] or ""
-        except KeyError:
-            username = ""
-            
-        try:
-            key_file = target_data['key file'] or ""
-        except KeyError:
-            key_file = ""
+            try: 
+                username = target_data['username'] or ""
+            except KeyError:
+                username = ""
+                
+            try:
+                key_file = target_data['key file'] or ""
+                passwd = None 
+            except KeyError:
+                import getpass
+                print "Please provide your password for the host", host
+                passwd = getpass.getpass()
+                key_file = None 
 
         if host == "internal":
             try:
@@ -371,9 +377,9 @@ def deploy_network(anm, nidb, input_graph_string, hosts):
         if platform == "netkit":
             import autonetkit.deploy.netkit as netkit_deploy
             tar_file = netkit_deploy.package(config_path, "nklab")
-            netkit_deploy.transfer(host, username, tar_file, tar_file, key_file)
+            netkit_deploy.transfer(host, username, tar_file, tar_file, key_filename=key_file, password=passwd)
             netkit_deploy.extract(host, username, tar_file,
-                                config_path, timeout=60, key_filename=key_file)
+                                config_path, timeout=60, key_filename=key_file, password=passwd)
         if platform == "cisco":
             cisco_deploy.package(config_path, "nklab")
 

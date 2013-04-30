@@ -450,6 +450,7 @@ def allocate_ips(g_ip, infrastructure = True, loopbacks = True, secondary_loopba
         #messaging.publish_compressed("www", "client", body)
         ip_tree.assign()
         g_ip.data.loopback_blocks = ip_tree.group_allocations()
+        g_ip.data.infra_blocks = ip_tree.group_allocations()
 
     secondary_loopback_tree = []
     if secondary_loopbacks:
@@ -496,6 +497,5 @@ def allocate_ips(g_ip, infrastructure = True, loopbacks = True, secondary_loopba
     messaging.publish_compressed("www", "client", body)
 
 #TODO: need to update with loopbacks if wish to advertise also - or subdivide blocks?
-    g_ip.data.infra_blocks = ip_tree.group_allocations()
 
     #ip_tree.save()
