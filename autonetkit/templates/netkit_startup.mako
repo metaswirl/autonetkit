@@ -6,6 +6,7 @@ route del default
 /etc/init.d/ssh start
 /etc/init.d/hostname.sh 
 /etc/init.d/zebra start
+/etc/init.d/snmpd start
 % if node.ssh.key:
 chown -R root:root /root     
 chmod 755 /root

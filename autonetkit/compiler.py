@@ -56,6 +56,7 @@ class RouterCompiler(object):
             self.isis(node)
         if node in self.anm['bgp']:
             self.bgp(node)
+        self.speed(node)
 
     def interfaces(self, node):
         node.interfaces = []
@@ -125,7 +126,6 @@ class RouterCompiler(object):
                 ipv4_subnet=node.loopback_subnet,
                 vrf_name=vrf_interface.vrf_name,
             )
-
             #node.interfaces.sort("id")
 
     def ospf(self, node):
@@ -287,6 +287,20 @@ class RouterCompiler(object):
                         'use_ipv6': node.ip.use_ipv6,
                         } #TODO: add wrapper for this
 
+    def speed(self, node):
+        speed = 100000
+        count = 3
+        for interface in node.physical_interfaces:
+            phy_int = self.anm['phy'].interface(interface)
+            speed_int = phy_int['speed']
+            return
+            if speed_int.speed > 0:
+                if interface.id.startswith("eth"):
+                    interface.speed = {
+                        'iface' : count,
+                        'speed' : speed,
+                    }
+                    count += 1
 
 class QuaggaCompiler(RouterCompiler):
     """Base Quagga compiler"""
@@ -298,6 +312,8 @@ class QuaggaCompiler(RouterCompiler):
             self.isis(node)
         if node in self.anm['dns']:
             self.dns(node)
+        self.speed(node)
+        self.memory(node)
 
     def interfaces(self, node):
         """Quagga interface compiler"""
@@ -370,6 +386,18 @@ class QuaggaCompiler(RouterCompiler):
         else:
             node.dns.role = None
 
+    def speed(self, node):
+        super(QuaggaCompiler, self).speed(node)
+
+    def memory(self, node):
+        """Returns memory links, also sets process_id
+        """
+        g_memory = self.anm['memory']
+        memory_node = g_memory.node(node)
+        if memory_node:
+            if memory_node.memory > 0:
+                node.memory = memory_node.memory
+
 # TODO: Don't render netkit lab topology if no netkit hosts
 
 class IosBaseCompiler(RouterCompiler):
@@ -402,7 +430,6 @@ class IosBaseCompiler(RouterCompiler):
         self.vrf(node)
 
     def interfaces(self, node):
-
         phy_loopback_zero = self.anm['phy'].interface(node.loopback_zero)
         if node.ip.use_ipv4:
             ipv4_loopback_subnet = netaddr.IPNetwork("0.0.0.0/32")
@@ -714,6 +741,8 @@ class NetkitCompiler(PlatformCompiler):
                     id=node.tap.id.replace("eth", ""),  # strip ethx -> x
                     ip=node.tap.ip,
                 )
+                if node.memory:
+                    lab_topology.tap_ips[-1]["memory"] = node.memory
 
         lab_topology.tap_ips.sort("ip")
         lab_topology.config_items.sort("device")

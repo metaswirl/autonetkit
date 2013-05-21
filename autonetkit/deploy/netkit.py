@@ -25,7 +25,7 @@ def package(src_dir, target = "netkit_lab"):
     tar.close()
     return tar_filename
 
-def transfer(host, username, local, remote = None, key_filename = None):
+def transfer(host, username, local, remote = None, key_filename = None, password = None):
     log.debug("Transferring lab to %s" % host)
     log.info("Transferring Netkit lab")
     if not remote:
@@ -33,12 +33,19 @@ def transfer(host, username, local, remote = None, key_filename = None):
     import paramiko
     ssh = paramiko.SSHClient()
     ssh.set_missing_host_key_policy( paramiko.AutoAddPolicy())
-    if key_filename:
-        log.debug("Connecting to %s with %s and key %s" % (host, username, key_filename))
-        ssh.connect(host, username = username, key_filename = key_filename)
-    else:
-        log.info("Connecting to %s with %s" % (host, username))
-        ssh.connect(host, username = username)
+    try:
+        if key_filename:
+            log.debug("Connecting to %s with %s and key %s" % (host, username, key_filename))
+            ssh.connect(host, username = username, key_filename = key_filename)
+        elif password:
+            log.info("Connecting to %s with %s" % (host, username))
+            ssh.connect(host, username = username, password=password)
+        else: 
+            log.error("No password, no key assigned for deployment")
+            exit(1)
+    except paramiko.SSHException:
+        log.error("Could not get access to host")
+        exit(1)
     log.debug("Opening SSH for SFTP")
     ftp = ssh.open_sftp()
     log.debug("Putting file %s to %s" % (local, remote))
@@ -46,7 +53,7 @@ def transfer(host, username, local, remote = None, key_filename = None):
     log.debug("Put file %s to %s" % (local, remote))
     ftp.close()
 
-def extract(host, username, tar_file, cd_dir, timeout = 45, key_filename = None, verbosity = 0):
+def extract(host, username, tar_file, cd_dir, timeout = 45, key_filename = None, password = None, verbosity = 0):
     """Extract and start lab"""
     log.debug("Extracting and starting lab on %s" % (host))
     log.info("Extracting and starting Netkit lab")
@@ -54,7 +61,7 @@ def extract(host, username, tar_file, cd_dir, timeout = 45, key_filename = None,
     from Exscript.util.start import start
     from Exscript.util.match import first_match
     from Exscript import PrivateKey
-    from Exscript.protocols.Exception import InvalidCommandException
+    from Exscript.protocols.Exception import InvalidCommandException, LoginFailure
 
     messaging = ank_messaging.AnkMessaging()
 
@@ -106,9 +113,12 @@ def extract(host, username, tar_file, cd_dir, timeout = 45, key_filename = None,
         key = PrivateKey.from_file(key_filename)
         log.debug("Connecting to %s with username %s and key %s" % (host, username, key_filename))
         accounts = [Account(username, key = key)] 
-    else:
+    elif password:
         log.debug("Connecting to %s with username %s" % (host, username))
-        accounts = [Account(username)] 
+        accounts = [Account(username, password)] 
+    else:
+        log.error("No password nor keyfile provided")
+        exit(1)
 
     hosts = ['ssh://%s' % host]
     start(accounts, hosts, start_lab, verbose = verbosity)
