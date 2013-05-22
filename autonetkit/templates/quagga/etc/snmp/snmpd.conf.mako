@@ -13,13 +13,11 @@ rocommunity public ${'.'.join(str(node.tap.ip).split('.')[:2])}.0.0/16
 #
 # Override for speed
 #
-% if node.snmp:
-    % for interface in node.interfaces:  
-        % if interface.snmp:
-override iso.3.6.1.2.1.2.2.1.5.${interface.snmp.iface} ${interface.snmp.speed}
-        % endif 
-    % endfor
-% endif
+% for interface in node.interfaces:  
+    % if interface.speed and interface.delay: ## traffic control needs speed and delay!
+override iso.3.6.1.2.1.2.2.1.5.${interface.iface} ${interface.speed}
+    % endif 
+% endfor
 
 #
 #  AgentX Sub-agents

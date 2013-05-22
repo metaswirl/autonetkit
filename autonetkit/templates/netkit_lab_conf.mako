@@ -12,4 +12,7 @@ ${config_item.device}[${config_item.key}]=${config_item.value}
 
 % for tap in topology.tap_ips:
 ${tap.device}[${tap.id}]=tap,${topology.tap_host},${tap.ip}
+    % if tap.memory:
+${tap.device}[mem]=${tap.memory}
+    % endif
 %endfor

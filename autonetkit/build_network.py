@@ -129,6 +129,10 @@ def build(input_graph):
     build_isis(anm)
     build_bgp(anm)
     build_dns(anm)
+    build_snmp(anm)
+    build_memory(anm)
+    build_speed(anm)
+    
     autonetkit.update_http(anm)
 
     return anm
@@ -604,7 +608,7 @@ def build_ipv4(anm, infrastructure=True):
         #ank_utils.save(g_ipv4)
 
     #TODO: need to also support secondary_loopbacks for IPv6
-    ipv4.allocate_ips(g_ipv4, infrastructure = False, loopbacks = False,
+    ipv4.allocate_ips(g_ipv4, infrastructure = False, loopbacks = True,
             secondary_loopbacks = True)
 
     autonetkit.update_http(anm)
@@ -893,6 +897,22 @@ def build_dns(anm):
     for node in g_dns:
         node.dns_role = g_dns._graph.node[str(node)]["dns"]
         node.dns_type = g_dns._graph.node[str(node)]["dns2"]
+
+def build_snmp(anm):
+    g_in = anm['input']
+    g_snmp = anm.add_overlay("snmp")
+    g_snmp.add_nodes_from(g_in.nodes())
+
+def build_memory(anm):
+    g_in = anm['input']
+    g_mem = anm.add_overlay("memory")
+    g_mem.add_nodes_from(g_in.nodes("memory"), retain=['memory'])
+
+def build_speed(anm):
+    g_in = anm['input']
+    g_speed = anm.add_overlay("speed")
+    g_speed.add_nodes_from(g_in.nodes())
+    g_speed.add_edges_from(g_in.edges("speed"), retain=['speed'])
 
 def update_messaging(anm):
     """Sends ANM to web server"""

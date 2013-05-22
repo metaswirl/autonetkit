@@ -153,6 +153,8 @@ def load_graphml(input_data):
     # and ensure asn is integer, x and y are floats
     for node in sorted(graph):
         graph.node[node]['asn'] = int(graph.node[node]['asn'])
+        if graph.node[node]['asn'] < 1:
+            raise Exception("Node %s has an impossible AS number of %d" % (graph.node[node]['label'], graph.node[node]['asn']))
         try:
             x = float(graph.node[node]['x'])
         except KeyError:

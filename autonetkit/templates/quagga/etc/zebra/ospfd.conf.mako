@@ -2,6 +2,8 @@ hostname ${node.zebra.hostname}
 password ${node.zebra.password}   
 banner motd file /etc/quagga/motd.txt
 !
+agentx
+!
 % for interface in node.interfaces:  
   %if interface.ospf_cost:
   interface ${interface.id}
