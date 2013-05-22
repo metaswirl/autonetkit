@@ -354,7 +354,7 @@ def deploy_network(anm, nidb, input_graph_string, hosts):
                 username = ""
                 
             try:
-                key_file = target_data['key file'] or ""
+                key_file = target_data['keyfile'] or ""
                 passwd = None 
             except KeyError:
                 import getpass
