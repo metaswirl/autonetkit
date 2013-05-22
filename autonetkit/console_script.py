@@ -355,6 +355,8 @@ def deploy_network(anm, nidb, input_graph_string, hosts):
                 
             try:
                 key_file = target_data['keyfile'] or ""
+                if not os.path.isfile(key_file):
+                    raise KeyError 
                 passwd = None 
             except KeyError:
                 import getpass
