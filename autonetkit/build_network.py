@@ -129,7 +129,6 @@ def build(input_graph):
     build_isis(anm)
     build_bgp(anm)
     build_dns(anm)
-    build_snmp(anm)
     build_memory(anm)
     build_speed(anm)
     
@@ -898,11 +897,6 @@ def build_dns(anm):
         node.dns_role = g_dns._graph.node[str(node)]["dns"]
         node.dns_type = g_dns._graph.node[str(node)]["dns2"]
 
-def build_snmp(anm):
-    g_in = anm['input']
-    g_snmp = anm.add_overlay("snmp")
-    g_snmp.add_nodes_from(g_in.nodes())
-
 def build_memory(anm):
     g_in = anm['input']
     g_mem = anm.add_overlay("memory")
@@ -912,7 +906,21 @@ def build_speed(anm):
     g_in = anm['input']
     g_speed = anm.add_overlay("speed")
     g_speed.add_nodes_from(g_in.nodes())
-    g_speed.add_edges_from(g_in.edges("speed"), retain=['speed'])
+    g_speed.add_edges_from(g_in.edges(), retain=['speed'])
+    for edge in g_speed.edges():
+        if not edge.delay:
+            delay = 0
+        else:
+            delay = edge.delay
+        if not edge.speed:
+            speed = 0
+        else:
+            speed = edge.speed
+
+        edge.src_int.speed = speed 
+        edge.dst_int.speed = speed 
+        edge.src_int.delay = delay
+        edge.dst_int.delay = delay
 
 def update_messaging(anm):
     """Sends ANM to web server"""

@@ -14,8 +14,8 @@ rocommunity public ${'.'.join(str(node.tap.ip).split('.')[:2])}.0.0/16
 # Override for speed
 #
 % for interface in node.interfaces:  
-    % if interface.speed and interface.delay: ## traffic control needs speed and delay!
-override iso.3.6.1.2.1.2.2.1.5.${interface.iface} ${interface.speed}
+    % if interface.speed: ## traffic control needs speed and delay!
+override iso.3.6.1.2.1.2.2.1.5.${interface.speed.iface} uinteger ${interface.speed.limit}
     % endif 
 % endfor
 

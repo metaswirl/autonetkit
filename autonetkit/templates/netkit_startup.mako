@@ -1,10 +1,10 @@
 % for i in node.interfaces:  
 /sbin/ifconfig ${i.id} ${i.ipv4_address} netmask ${i.ipv4_subnet.netmask} broadcast ${i.ipv4_subnet.broadcast} up
-    % if i.speed and i.delay:
+    % if i.speed:
 # limit interface
 # heuristic burst (speed / 8 (bits->bytes) * 1024 (KB->b) / 10 (10%) => 12.8)
-/sbin/orig-tc qdisc add dev {$i.id} root handle 1:0 netem delay {$i.delay}
-/sbin/orig-tc qdisc add dev {$i.id} parent 1:1 handle 10: tbf limit {max(i.speed * 13, 1600)} burst {max(i.speed * 13, 1600)} rate {$i.speed}
+/sbin/orig-tc qdisc add dev ${i.id} root handle 1:0 netem delay ${i.speed.delay}ms
+/sbin/orig-tc qdisc add dev ${i.id} parent 1:1 handle 10: tbf limit ${max(i.speed.limit * 13, 1600)}b burst ${max(i.speed.limit * 13, 1600)}b rate ${i.speed.limit}kbit
     % endif
 % endfor                                                                                                                             
 route del default

@@ -293,12 +293,12 @@ class RouterCompiler(object):
         for interface in node.physical_interfaces:
             phy_int = self.anm['phy'].interface(interface)
             speed_int = phy_int['speed']
-            return
             if speed_int.speed > 0:
                 if interface.id.startswith("eth"):
                     interface.speed = {
                         'iface' : count,
-                        'speed' : speed,
+                        'limit' : speed_int.speed,
+                        'delay' : speed_int.delay,
                     }
                     count += 1
 
