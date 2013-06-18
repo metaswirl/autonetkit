@@ -797,6 +797,25 @@ def ip_to_net_ent_title_ios(ip_addr):
     return ".".join([area_id, ip_octets[0:4], ip_octets[4:8], ip_octets[8:12],
                      "00"])
 
+def ip_to_net_bit_str(ip_addr):
+    """ converts an IP Address to net bit string for snmpd """
+    try:
+        ip_words = ip_addr.words
+    except AttributeError:
+        import netaddr  # try to cast to IP Address
+        ip_addr = netaddr.IPAddress(ip_addr)
+        ip_words = ip_addr.words
+
+    dec_str = ""
+    bit_str = "0x"
+
+    for word in ip_addr.words:
+        dec_str += "%03d" % word
+
+    for i in range(0, len(dec_str), 2):
+        bit_str += "%02x" % int(dec_str[i:i+2])
+
+    return bit_str
 
 def build_isis(anm):
     """Build isis overlay"""
@@ -823,6 +842,7 @@ def build_isis(anm):
     for node in g_isis:
         ip_node = g_ipv4.node(node)
         node.net = ip_to_net_ent_title_ios(ip_node.loopback)
+        node.net_bit_str = ip_to_net_bit_str(ip_node.loopback)
         node.process_id = 1  # default
 
     for link in g_isis.edges():

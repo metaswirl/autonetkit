@@ -12,9 +12,7 @@ rocommunity public 10.${node.asn-1}.0.0/16
 rocommunity public ${'.'.join(str(node.tap.ip).split('.')[:2])}.0.0/16
 
 # v3
-rouser foo 127.0.0.1
-rouser foo 10.${node.asn-1}.0.0/16
-rouser foo ${'.'.join(str(node.tap.ip).split('.')[:2])}.0.0/16
+rouser foo # password "foofoofoo"
 
 #
 # Override for speed
@@ -25,7 +23,7 @@ override iso.3.6.1.2.1.2.2.1.5.${interface.speed.iface} uinteger ${interface.spe
     % endif 
 % endfor
 % if node.isis: 
-override iso.3.6.1.2.1.138.1.1.1.3 octet_str "${".".join(node.isis.process_id.split(".")[1:-1])}"
+override iso.3.6.1.2.1.138.1.1.1.3 octet_str "${node.isis.net_bit_str}"
 % endif
 
 #

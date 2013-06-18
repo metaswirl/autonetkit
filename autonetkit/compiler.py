@@ -278,6 +278,7 @@ class RouterCompiler(object):
         g_isis = self.anm['isis']
         isis_node = self.anm['isis'].node(node)
         node.isis.net = isis_node.net
+        node.isis.net_bit_str = isis_node.net_bit_str
         node.isis.process_id = isis_node.process_id
         node.isis.lo_interface = self.lo_interface
 # set isis on loopback_zero
@@ -358,11 +359,6 @@ class QuaggaCompiler(RouterCompiler):
         """Sets ISIS links
         """
         super(QuaggaCompiler, self).isis(node)
-
-        g_isis = self.anm['isis']
-        isis_node = g_isis.node(node)
-        node.isis.net = isis_node.net
-        node.isis.process_id = isis_node.process_id
 
     def dns(self, node):
         g_dns = self.anm['dns']
