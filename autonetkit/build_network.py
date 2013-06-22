@@ -806,16 +806,12 @@ def ip_to_net_bit_str(ip_addr):
         ip_addr = netaddr.IPAddress(ip_addr)
         ip_words = ip_addr.words
 
-    dec_str = ""
-    bit_str = "0x"
+    dec_str = "0x"
 
     for word in ip_addr.words:
         dec_str += "%03d" % word
 
-    for i in range(0, len(dec_str), 2):
-        bit_str += "%02x" % int(dec_str[i:i+2])
-
-    return bit_str
+    return dec_str 
 
 def build_isis(anm):
     """Build isis overlay"""
