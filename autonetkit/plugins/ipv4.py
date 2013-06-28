@@ -441,7 +441,7 @@ def allocate_ips(g_ip, infrastructure = True, loopbacks = True, secondary_loopba
     loopback_tree = []
     if loopbacks:
         log.info("Allocating v4 Primary Host loopback IPs")
-        ip_tree = IpTree("192.168.1.0")
+        ip_tree = IpTree("192.168.2.0")
         ip_tree.add_nodes(g_ip.nodes("is_l3device"))
         ip_tree.build()
         loopback_tree = ip_tree.json()
