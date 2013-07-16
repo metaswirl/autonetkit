@@ -99,7 +99,7 @@ def extract(host, username, tar_file, cd_dir, timeout = 3600, key_filename = Non
         conn.execute('vlist')
         conn.execute("lclean")
         log.info("Starting lab")
-        start_command = 'lstart -p8 -o--con0=none'
+        start_command = 'lstart -p20 -o--con0=none'
         try:
             conn.execute(start_command)
         except InvalidCommandException, error:
