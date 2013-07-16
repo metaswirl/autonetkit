@@ -53,7 +53,7 @@ def transfer(host, username, local, remote = None, key_filename = None, password
     log.debug("Put file %s to %s" % (local, remote))
     ftp.close()
 
-def extract(host, username, tar_file, cd_dir, timeout = 45, key_filename = None, password = None, verbosity = 0):
+def extract(host, username, tar_file, cd_dir, timeout = 3600, key_filename = None, password = None, verbosity = 0):
     """Extract and start lab"""
     log.debug("Extracting and starting lab on %s" % (host))
     log.info("Extracting and starting Netkit lab")
@@ -99,7 +99,7 @@ def extract(host, username, tar_file, cd_dir, timeout = 45, key_filename = None,
         conn.execute('vlist')
         conn.execute("lclean")
         log.info("Starting lab")
-        start_command = 'lstart -p5 -o --con0=none'
+        start_command = 'lstart -p8 -o--con0=none'
         try:
             conn.execute(start_command)
         except InvalidCommandException, error:

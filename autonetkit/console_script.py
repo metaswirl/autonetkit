@@ -381,7 +381,7 @@ def deploy_network(anm, nidb, input_graph_string, hosts):
             tar_file = netkit_deploy.package(config_path, "nklab")
             netkit_deploy.transfer(host, username, tar_file, tar_file, key_filename=key_file, password=passwd)
             netkit_deploy.extract(host, username, tar_file,
-                                config_path, timeout=60, key_filename=key_file, password=passwd)
+                                config_path, timeout=3600, key_filename=key_file, password=passwd)
         if platform == "cisco":
             cisco_deploy.package(config_path, "nklab")
 
